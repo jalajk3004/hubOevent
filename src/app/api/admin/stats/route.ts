@@ -19,8 +19,18 @@ export async function GET() {
         }
 
         // Calculate stats client/edge side
-        const totalRevenue = data.filter(d => d.status === 'paid').reduce((sum, d) => sum + Number(d.amount), 0);
-        const totalTicketsSold = data.filter(d => d.status === 'paid').length;
+        // Total revenue from all 'paid' payments
+        const { data: payments, error: paymentsError } = await supabase
+            .from('payments')
+            .select('amount, status')
+            .eq('status', 'paid');
+
+        if (paymentsError) {
+            console.error("Supabase payments stats error:", paymentsError);
+        }
+
+        const totalRevenue = (payments || []).reduce((sum, p) => sum + Number(p.amount), 0);
+        const totalTicketsSold = (payments || []).length;
         const totalRegistrations = data.length;
 
         const categoryCounts = data.reduce((acc, curr) => {

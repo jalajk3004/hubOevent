@@ -23,10 +23,10 @@ export async function sendWhatsAppTicket(phone: string, ticketDetails: TicketDet
   }
 
   try {
-    // Forcing the number to the user's specific number for all messages as requested
-    const formattedPhone = '918851454740';
+    // Format the phone number (remove + and spaces)
+    const formattedPhone = phone.replace('+', '').replace(/\s/g, '');
 
-    const messageBody = `🎉 *Payment Successful!* 🎉\n\nHi *${ticketDetails.name}*,\nThank you for booking with HubO Events. Your payment of *₹${ticketDetails.amount}* was successful.\n\n*Ticket Details:*\n📅 *Event:* ${ticketDetails.event.replace('-', ' ').toUpperCase()}\n🎫 *Category:* ${ticketDetails.category}\n⭐ *Type:* ${ticketDetails.type.toUpperCase()}\n🎟️ *Quantity:* ${ticketDetails.quantity}\n\n*Ticket ID:* ${ticketDetails.ticketId}\n*Payment ID:* ${ticketDetails.paymentId}\n\nPresent this message at the venue entrance. See you at the event! 🥳\n\n_HubO Events_`;
+    console.log(`[WHATSAPP] Attempting to send message to ${formattedPhone} using ID ${phoneNumberId}`);
 
     const response = await fetch(getApiUrl(), {
       method: 'POST',
@@ -37,21 +37,25 @@ export async function sendWhatsAppTicket(phone: string, ticketDetails: TicketDet
       body: JSON.stringify({
         messaging_product: 'whatsapp',
         to: formattedPhone,
-        type: 'text',
-        text: {
-          preview_url: false,
-          body: messageBody,
-        },
+        type: 'template',
+        template: {
+          name: 'hello_world',
+          language: {
+            code: 'en_US'
+          }
+        }
       }),
     });
 
     const data = await response.json();
+    console.log('[WHATSAPP] API Response:', JSON.stringify(data, null, 2));
 
     if (!response.ok) {
+      console.error(`[WHATSAPP] Meta API Error:`, data);
       throw new Error(data.error?.message || 'Failed to send WhatsApp message via Meta API');
     }
 
-    console.log(`[WHATSAPP] Successfully sent ticket via Meta to ${formattedPhone}`);
+    console.log(`[WHATSAPP] Successfully accepted for delivery to ${formattedPhone}. Message ID: ${data.messages?.[0]?.id}`);
     return { success: true, messageId: data.messages?.[0]?.id };
   } catch (error) {
     console.error(`[WHATSAPP] Failed to send message to ${phone}:`, error);

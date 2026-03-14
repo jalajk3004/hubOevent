@@ -11,7 +11,7 @@ export async function GET() {
 
         const { data, error } = await supabase
             .from('registrations')
-            .select('*')
+            .select('*, payments (paytm_payment_id, status, amount)')
             .order('created_at', { ascending: false });
 
         if (error) {

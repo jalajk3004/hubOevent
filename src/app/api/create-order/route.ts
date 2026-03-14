@@ -31,7 +31,8 @@ export async function POST(req: Request) {
                 category: ticketData.category,
                 quantity: 1,
                 amount: amount,
-                status: 'initiated'
+                status: 'initiated',
+                razorpay_order_id: null // Will be updated below with its own ID
             }])
             .select('id')
             .single();
@@ -41,12 +42,23 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, message: "Failed to initiate registration" }, { status: 500 });
         }
 
+        // 2. Update the record to set razorpay_order_id to the registration ID
+        // This makes tracking easier as Paytm Order ID = Registration ID
+        const { error: updateError } = await supabase
+            .from('registrations')
+            .update({ razorpay_order_id: reg.id })
+            .eq('id', reg.id);
+
+        if (updateError) {
+            console.error("Failed to update razorpay_order_id:", updateError);
+        }
+
         const mid = process.env.PAYTM_MID!;
         const mkey = process.env.PAYTM_MERCHANT_KEY!;
         const website = process.env.PAYTM_WEBSITE!;
         const host = process.env.PAYTM_HOST || 'https://securestage.paytmpayments.com';
         
-        // 2. Use the database record ID as the Paytm Order ID
+        // Use registration ID as the Order ID
         const orderId = reg.id;
         const customerId = `CUST_${Date.now()}`;
 
