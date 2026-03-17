@@ -21,7 +21,6 @@ function CheckoutContent() {
     phone: "",
     event: "neon-nights",
     type: "general",
-    aadhaar: "",
     address: "",
     category: "Dance"
   });
@@ -219,10 +218,6 @@ function CheckoutContent() {
                     <option value="Singing">Singing</option>
                     <option value="Dialogue Mimicry">Dialogue Mimicry</option>
                   </select>
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Aadhaar Card ID</label>
-                  <input type="text" required placeholder="1234 5678 9012" value={ticketData.aadhaar} onChange={e => setTicketData({ ...ticketData, aadhaar: e.target.value })} />
                 </div>
                 <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
                   <label>Full Address</label>

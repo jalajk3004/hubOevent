@@ -270,11 +270,12 @@
 /* About Section Redesign */
 .aboutSection {
   position: relative;
-  height: 100vh;
-  min-height: 800px;
+  min-height: 100vh;
+  height: auto;
   overflow: hidden;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .aboutBg {

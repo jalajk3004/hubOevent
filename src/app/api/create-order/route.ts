@@ -26,7 +26,6 @@ export async function POST(req: Request) {
                 phone: ticketData.phone,
                 event: ticketData.event,
                 type: ticketData.type,
-                aadhaar: ticketData.aadhaar,
                 address: ticketData.address,
                 category: ticketData.category,
                 quantity: 1,

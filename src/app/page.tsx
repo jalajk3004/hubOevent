@@ -6,10 +6,11 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from "framer-motion";
 import { Music, Calendar, MapPin, Users, Building, Video, ArrowRight, Instagram, Twitter, Facebook, ExternalLink, ShieldCheck, Mail, Smartphone, Tent } from "lucide-react";
 import * as THREE from "three";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Points, PointMaterial } from "@react-three/drei";
 import gsap from "gsap";
 import styles from "./page.module.css";
+import ScrollExpandHero from "@/components/blocks/scroll-expansion-hero";
 
 // Extend window interface to recognize Paytm
 declare global {
@@ -202,19 +203,41 @@ const ParticleSphere = ({ isExiting }: { isExiting: boolean }) => {
 
 const CinematicLoader = ({ onComplete }: { onComplete: () => void }) => {
   const [isExiting, setIsExiting] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [loadingText, setLoadingText] = useState("INITIALIZING SYSTEM...");
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
     document.documentElement.style.overflow = "hidden";
 
-    // Trigger the exit animation sequence after loading time
+    // Progress bar simulation
+    const duration = 4000; // Load over 4 seconds
+    const intervalTime = 50;
+    const steps = duration / intervalTime;
+    let currentStep = 0;
+
+    const progressInterval = setInterval(() => {
+      currentStep++;
+      const newProgress = Math.min((currentStep / steps) * 100, 100);
+      setProgress(newProgress);
+
+      // Change loading text based on progress
+      if (newProgress > 85) setLoadingText("WELCOME TO...");
+      else if (newProgress > 60) setLoadingText("RENDERING NEON LIGHTS...");
+      else if (newProgress > 35) setLoadingText("CONNECTING GUEST LIST...");
+      else if (newProgress > 15) setLoadingText("CONFIGURING AUDIO ENGINES...");
+    }, intervalTime);
+
+    // Timing for exit
     const finishTimer = setTimeout(() => {
       setIsExiting(true);
-      setTimeout(onComplete, 1500); // 1.5s for explosion animation
+      clearInterval(progressInterval);
+      setTimeout(onComplete, 2000); // 2s exit animation
     }, 4500);
 
     return () => {
       clearTimeout(finishTimer);
+      clearInterval(progressInterval);
       document.body.style.overflow = "";
       document.documentElement.style.overflow = "";
     };
@@ -223,11 +246,11 @@ const CinematicLoader = ({ onComplete }: { onComplete: () => void }) => {
   return (
     <motion.div
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.5, delay: 1 }} // Fade out background very end
+      transition={{ duration: 1 }}
       style={{
         position: "fixed",
         inset: 0,
-        backgroundColor: "#05020a", // Deep luxury violet-black
+        backgroundColor: "#020104",
         zIndex: 9999,
         display: "flex",
         alignItems: "center",
@@ -236,43 +259,16 @@ const CinematicLoader = ({ onComplete }: { onComplete: () => void }) => {
         perspective: "1000px"
       }}
     >
-      {/* Background Fog & Atmosphere */}
-      <motion.div
-        animate={{ opacity: isExiting ? 0 : 0.6 }}
-        transition={{ duration: 1 }}
+      {/* Soft overlay bloom for the scene */}
+      <div
         style={{
           position: "absolute",
           inset: 0,
-          background: "radial-gradient(circle at center, rgba(138,43,226,0.15) 0%, rgba(0,0,0,0) 70%)",
-          zIndex: 1,
+          background: "radial-gradient(circle at center, rgba(138,43,226,0.1) 0%, rgba(0,0,0,0) 60%)",
+          zIndex: 2,
           pointerEvents: "none"
         }}
       />
-
-      {/* Laser Light Sweeps */}
-      {!isExiting && [...Array(2)].map((_, i) => (
-        <motion.div
-          key={`laser-${i}`}
-          initial={{ rotate: i === 0 ? -45 : 45, opacity: 0 }}
-          animate={{
-            rotate: i === 0 ? [-45, 45, -45] : [45, -45, 45],
-            opacity: [0, 0.4, 0]
-          }}
-          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: i * 3 }}
-          style={{
-            position: "absolute",
-            width: "200%",
-            height: "100px",
-            background: "linear-gradient(90deg, transparent 40%, rgba(0,255,255,0.08) 50%, transparent 60%)",
-            top: "50%",
-            left: "-50%",
-            transformOrigin: "center",
-            zIndex: 2,
-            filter: "blur(8px)",
-            pointerEvents: "none"
-          }}
-        />
-      ))}
 
       {/* 3D Particle Sphere Canvas */}
       <div style={{ position: "absolute", inset: 0, zIndex: 5 }}>
@@ -282,64 +278,68 @@ const CinematicLoader = ({ onComplete }: { onComplete: () => void }) => {
         </Canvas>
       </div>
 
-      {/* Branding Overlay (Fades out when zooming) */}
+      {/* Dynamic Text Information */}
       <motion.div
-        animate={{ opacity: isExiting ? 0 : 1 }}
-        transition={{ duration: 0.5 }}
+        animate={{ opacity: isExiting ? 0 : 1, y: isExiting ? -50 : 0 }}
+        transition={{ duration: 0.8 }}
         style={{
           position: "absolute",
-          bottom: "15%",
+          zIndex: 10,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          zIndex: 10
+          pointerEvents: "none",
+          textAlign: "center"
         }}
       >
-        <motion.h1
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 2, duration: 1 }}
-          style={{
-            fontFamily: "var(--font-outfit)",
-            fontSize: "clamp(2rem, 4vw, 3.5rem)",
-            fontWeight: 800,
-            letterSpacing: "4px",
-            color: "#fff",
-            textTransform: "uppercase",
-            textShadow: "0 0 20px rgba(138,43,226,0.8), 0 0 40px rgba(0,255,255,0.4)",
-            margin: "0 0 20px 0"
-          }}
-        >
-          HubO Events
-        </motion.h1>
+        <h1 style={{
+          fontFamily: "var(--font-outfit)",
+          fontSize: "clamp(3.5rem, 8vw, 6rem)",
+          fontWeight: 800,
+          letterSpacing: "0.2em",
+          textTransform: "uppercase",
+          color: "#ffffff",
+          textShadow: "0 0 30px rgba(138,43,226,0.3), 0 0 60px rgba(0,255,255,0.2)",
+          marginBottom: "1.5rem",
+          lineHeight: 1.1
+        }}>
+          HUBO<br />EVENTS
+        </h1>
 
-        {/* Minimal Loading Indicator */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 2.5, duration: 1 }}
-          style={{
-            width: "150px",
-            height: "2px",
-            background: "rgba(255,255,255,0.1)",
-            position: "relative",
-            overflow: "hidden",
-            borderRadius: "2px"
-          }}
-        >
-          <motion.div
-            animate={{ left: ["-100%", "100%"] }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-            style={{
-              position: "absolute",
-              top: 0,
-              bottom: 0,
-              width: "40%",
-              background: "linear-gradient(90deg, transparent, #8a2be2, #00ffff, transparent)",
-              boxShadow: "0 0 10px rgba(0,255,255,0.8)"
-            }}
-          />
-        </motion.div>
+        {/* Progress Bar Container */}
+        <div style={{
+          width: '200px',
+          height: '6px', /* thicker, cuter bar */
+          background: 'rgba(255,255,255,0.15)',
+          position: 'relative',
+          overflow: 'hidden',
+          borderRadius: '10px'
+        }}>
+          {/* Active Progress Fill */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            bottom: 0,
+            width: `${progress}%`,
+            background: 'linear-gradient(90deg, #8a2be2, #00ffff)',
+            boxShadow: '0 0 10px rgba(0,255,255,0.5)',
+            transition: 'width 0.1s linear',
+            borderRadius: '10px'
+          }} />
+        </div>
+
+        <span style={{
+          fontFamily: "var(--font-fredoka)",
+          fontSize: '0.8rem',
+          fontWeight: 600,
+          letterSpacing: '2px',
+          color: 'rgba(255,255,255,0.7)',
+          marginTop: '0.8rem',
+          fontVariantNumeric: 'tabular-nums'
+        }}>
+          {Math.floor(progress)}%
+        </span>
       </motion.div>
     </motion.div>
   );
@@ -415,52 +415,12 @@ export default function Home() {
         </nav>
 
         {/* 1. HERO SECTION */}
-        <section className={styles.hero}>
-          <div className={styles.videoGrid}>
-            <div className={styles.videoColumn}>
-              <video autoPlay muted loop playsInline>
-                <source src="/dancing.mp4" type="video/mp4" />
-              </video>
-            </div>
-            <div className={styles.videoColumn}>
-              <video autoPlay muted loop playsInline>
-                <source src="/singing.mp4" type="video/mp4" />
-              </video>
-            </div>
-            <div className={styles.videoColumn}>
-              <video autoPlay muted loop playsInline>
-                <source src="/dialogue.mp4" type="video/mp4" />
-              </video>
-            </div>
-          </div>
-          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2, pointerEvents: 'none' }}>
-            <Particles />
-          </div>
-
-          <motion.div
-            className={styles.heroContent}
-            initial={isLoaderActive ? { opacity: 0, scale: 0.9 } : {}}
-            animate={isLoaderActive ? { opacity: 1, scale: 1 } : {}}
-            transition={{ duration: 1 }}
-          >
-            <motion.h1
-              className={`${styles.headline} ${styles.threedHeadline}`}
-              initial={isLoaderActive ? { y: 20, opacity: 0 } : {}}
-              animate={isLoaderActive ? { y: 0, opacity: 1 } : {}}
-              transition={{ delay: 0.2, duration: 0.8 }}
-            >
-              INSTAGRAM KE DHURANDAR
-            </motion.h1>
-            <motion.p
-              className={styles.presentedBy}
-              initial={isLoaderActive ? { opacity: 0 } : {}}
-              animate={isLoaderActive ? { opacity: 1 } : {}}
-              transition={{ delay: 0.5, duration: 0.8 }}
-            >
-              PRESENTED BY HUBO EVENTS
-            </motion.p>
-          </motion.div>
-        </section>
+        <ScrollExpandHero
+          videoSrcs={['/dancing.mp4', '/singing.mp4', '/dialogue.mp4']}
+          title="DHURANDHAR INSTA KE"
+          subtitle="PRESENTED BY HUBO EVENTS"
+          scrollToExpand="Scroll to expand"
+        />
 
         {/* 3. ABOUT HUBO EVENTS & STATS */}
         <section className={styles.aboutSection} id="about">
@@ -516,6 +476,74 @@ export default function Home() {
               </div>
             </div>
           </div>
+
+        </section>
+
+        {/* 4. ORGANIZED BY MONICA GULATI (Separate Section) */}
+        <section style={{
+          position: 'relative',
+          padding: '100px 5%',
+          background: 'var(--background)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '3rem',
+          width: '100%',
+          zIndex: 10,
+          borderBottom: '1px solid var(--glass-border)'
+        }}>
+          <h3 style={{
+            fontFamily: 'var(--font-outfit)', 
+            fontSize: 'clamp(1.8rem, 5vw, 3rem)', 
+            fontWeight: 800, 
+            letterSpacing: '6px',
+            textTransform: 'uppercase',
+            color: '#ffffff',
+            textAlign: 'center',
+            textShadow: '0 0 15px rgba(255,42,133,0.3)',
+          }}>
+            Organized By Monica Gulati
+          </h3>
+          
+          {/* Glowing Placeholder Image */}
+          <div className="relative w-64 h-64 md:w-80 md:h-80 rounded-full" style={{ padding: '3px' }}>
+            <div className="rgb-border-glow rounded-full" style={{ opacity: 0.3, filter: 'blur(8px)' }} />
+            <div className="rgb-border-wrapper rounded-full" style={{ opacity: 0.5 }} />
+            
+            <div 
+              className="relative w-full h-full rounded-full overflow-hidden flex items-center justify-center z-10"
+              style={{
+                background: 'linear-gradient(135deg, rgba(20,20,30,0.8), rgba(5,5,10,0.9))',
+                backdropFilter: 'blur(10px)',
+                boxShadow: 'inset 0 0 30px rgba(0,0,0,0.8)'
+              }}
+            >
+              <span style={{ 
+                fontFamily: 'var(--font-outfit)', 
+                letterSpacing: '3px', 
+                color: 'rgba(255,255,255,0.4)',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                textAlign: 'center',
+                padding: '20px'
+              }}>
+                IMAGE PLACEHOLDER
+              </span>
+            </div>
+          </div>
+
+          <h4 style={{
+            fontFamily: 'var(--font-inter)',
+            fontSize: '1rem',
+            fontWeight: 500,
+            letterSpacing: '4px',
+            color: 'rgba(255, 255, 255, 0.7)',
+            textTransform: 'uppercase',
+            textAlign: 'center',
+            marginTop: '-1rem'
+          }}>
+            CEO OF HUBO EVENT
+          </h4>
         </section>
 
         {/* 5. UPCOMING SHOWS CAROUSEL */}
