@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState, memo } from 'react';
 import { motion, useMotionValue, useTransform } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Waves } from '@/components/ui/wave-background';
 
 interface ScrollExpandHeroProps {
   videoSrcs: [string, string, string];
@@ -14,15 +13,6 @@ interface ScrollExpandHeroProps {
 
 const BackgroundElements = memo(() => (
   <>
-    {/* Minimalist Waves Background */}
-    <div className="absolute inset-0 z-0 pointer-events-none opacity-100">
-      <Waves
-        className="h-full w-full"
-        strokeColor="#555555"
-        backgroundColor="transparent"
-      />
-    </div>
-
     {/* Scanline texture */}
     <div
       className="absolute inset-0 z-0 pointer-events-none"
