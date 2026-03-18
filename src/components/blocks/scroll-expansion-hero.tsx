@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, memo } from 'react';
 import { motion, useMotionValue, useTransform } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { Instagram } from 'lucide-react';
 
 interface ScrollExpandHeroProps {
   videoSrcs: [string, string, string];
@@ -24,6 +25,62 @@ const BackgroundElements = memo(() => (
   </>
 ));
 BackgroundElements.displayName = 'BackgroundElements';
+
+const RandomInstaIcons = memo(() => {
+  const [positions, setPositions] = useState<{ id: number; top: string; left: string; size: number }[]>([]);
+
+  useEffect(() => {
+    // Generate random positions only on the client
+    const newPositions = Array.from({ length: 9 }).map((_, i) => ({
+      id: i,
+      top: `${Math.floor(Math.random() * 85) + 5}%`,
+      left: `${Math.floor(Math.random() * 85) + 5}%`,
+      size: Math.floor(Math.random() * 28) + 24, // 24px to 52px
+    }));
+    setPositions(newPositions);
+  }, []);
+
+  return (
+    <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden">
+      {/* SVG definitions for the Instagram gradient */}
+      <svg width="0" height="0" className="absolute">
+        <defs>
+          <linearGradient id="instagram-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#f09433" />
+            <stop offset="25%" stopColor="#e6683c" />
+            <stop offset="50%" stopColor="#dc2743" />
+            <stop offset="75%" stopColor="#cc2366" />
+            <stop offset="100%" stopColor="#bc1888" />
+          </linearGradient>
+        </defs>
+      </svg>
+      {positions.map((pos) => (
+        <motion.div
+          key={pos.id}
+          className="absolute text-white/30 pointer-events-auto cursor-pointer group"
+          style={{ top: pos.top, left: pos.left, pointerEvents: 'auto' }}
+          whileHover={{ rotate: 360, scale: 1.25 }}
+          transition={{
+            type: "spring",
+            stiffness: 260,
+            damping: 20
+          }}
+        >
+          {/* Default state */}
+          <div className="absolute inset-0 transition-opacity duration-300 opacity-100 group-hover:opacity-0">
+            <Instagram size={pos.size} strokeWidth={1.5} />
+          </div>
+          {/* Hover state with gradient */}
+          <div className="transition-opacity duration-300 opacity-0 group-hover:opacity-100">
+            <Instagram size={pos.size} strokeWidth={1.5} stroke="url(#instagram-gradient)" />
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
+});
+RandomInstaIcons.displayName = 'RandomInstaIcons';
+
 
 const ScrollExpandHero = ({
   videoSrcs,
@@ -115,6 +172,7 @@ const ScrollExpandHero = ({
   return (
     <div ref={sectionRef} className="relative overflow-hidden" style={{ height: '100dvh' }}>
       <BackgroundElements />
+      <RandomInstaIcons />
 
       <section className="relative z-10 flex flex-col items-center justify-center w-full h-full">
         {/* Expanding 3-column video card */}
