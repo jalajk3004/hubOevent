@@ -220,28 +220,32 @@ const ScrollExpandHero = ({
           style={{ opacity: contentOpacity }}
         >
           <motion.h1
-            className="font-black uppercase"
+            className="font-black uppercase whitespace-nowrap"
             style={{
               x: textTranslateLeft,
-              fontSize: 'clamp(2.4rem, 7vw, 6.5rem)',
-              lineHeight: 1, letterSpacing: '14px', wordSpacing: '16px',
+              fontSize: isMobileState ? 'clamp(1.6rem, 9vw, 3rem)' : 'clamp(2.4rem, 7vw, 6.5rem)',
+              lineHeight: 1, 
+              letterSpacing: isMobileState ? '4px' : '14px', 
+              wordSpacing: isMobileState ? '6px' : '16px',
               background: 'linear-gradient(135deg, #ffffff 0%, #e0aaff 35%, #00ffff 65%, #ffffff 100%)',
               backgroundSize: '200% 200%', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              marginLeft: '14px', // offset letter spacing
+              marginLeft: isMobileState ? '4px' : '14px', // offset letter spacing
             }}
           >
             {firstWord}
           </motion.h1>
 
           <motion.h1
-            className="font-black uppercase"
+            className="font-black uppercase whitespace-nowrap"
             style={{
               x: textTranslateRight,
-              fontSize: 'clamp(2.4rem, 7vw, 6.5rem)',
-              lineHeight: 1, letterSpacing: '14px', wordSpacing: '16px',
+              fontSize: isMobileState ? 'clamp(1.6rem, 9vw, 3rem)' : 'clamp(2.4rem, 7vw, 6.5rem)',
+              lineHeight: 1, 
+              letterSpacing: isMobileState ? '4px' : '14px', 
+              wordSpacing: isMobileState ? '6px' : '16px',
               background: 'linear-gradient(135deg, #ffffff 0%, #ff2a85 35%, #e0aaff 65%, #ffffff 100%)',
               backgroundSize: '200% 200%', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              marginLeft: '14px', // offset letter spacing
+              marginLeft: isMobileState ? '4px' : '14px', // offset letter spacing
             }}
           >
             {restOfTitle}
