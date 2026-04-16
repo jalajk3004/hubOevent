@@ -18,45 +18,72 @@ export async function POST(req: Request) {
             try { body = JSON.parse(text); } catch { /* ignore */ }
         }
 
-        const { ORDERID, TXNID, RESPCODE, RESPMSG, CHECKSUMHASH, TXNAMOUNT } = body;
-        const merchantKey = process.env.PAYTM_MERCHANT_KEY!;
-        const mid = process.env.PAYTM_MID!;
-        const host = process.env.PAYTM_HOST || 'https://securestage.paytmpayments.com';
+        const { ORDERID, TXNID, RESPCODE, RESPMSG, CHECKSUMHASH, TXNAMOUNT, gateway, razorpay_payment_id, razorpay_order_id, razorpay_signature } = body;
+        
+        let isSuccess = false;
+        let finalOrderId = '';
+        let finalTxnId = '';
+        let paymentAmount = '0';
+        let statusMsg = '';
 
-        if (!ORDERID) {
-            return NextResponse.redirect(new URL(`/checkout?payment=failed&msg=MissingOrderID`, req.url), { status: 303 });
+        if (gateway === 'razorpay' || razorpay_payment_id) {
+            // Razorpay Verification
+            finalOrderId = razorpay_order_id;
+            finalTxnId = razorpay_payment_id;
+            
+            const crypto = require("crypto");
+            const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!);
+            hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
+            const generated_signature = hmac.digest('hex');
+
+            isSuccess = generated_signature === razorpay_signature;
+            statusMsg = isSuccess ? "Payment Successful" : "Signature Mismatch";
+        } else {
+            // Paytm Verification
+            const merchantKey = process.env.PAYTM_MERCHANT_KEY!;
+            const mid = process.env.PAYTM_MID!;
+            const host = process.env.PAYTM_HOST || 'https://securestage.paytmpayments.com';
+
+            if (!ORDERID) {
+                return NextResponse.redirect(new URL(`/checkout?payment=failed&msg=MissingOrderID`, req.url), { status: 303 });
+            }
+
+            finalOrderId = ORDERID;
+            finalTxnId = TXNID || 'N/A';
+            paymentAmount = TXNAMOUNT || '0';
+
+            const paytmParams: any = {};
+            paytmParams.body = {
+                "mid": mid,
+                "orderId": ORDERID,
+            };
+
+            const signature = await PaytmChecksum.generateSignature(JSON.stringify(paytmParams.body), merchantKey);
+            paytmParams.head = { "signature": signature };
+
+            const statusResponse = await fetch(`${host}/v3/order/status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(paytmParams)
+            });
+
+            const statusData = await statusResponse.json();
+            isSuccess = statusData?.body?.resultInfo?.resultStatus === 'TXN_SUCCESS';
+            statusMsg = statusData?.body?.resultInfo?.resultMsg || "Payment Failed";
+            if (statusData?.body?.txnAmount) {
+                paymentAmount = statusData.body.txnAmount;
+            }
         }
 
-        // Server-Side Verification using v3 order status
-        const paytmParams: any = {};
-        paytmParams.body = {
-            "mid": mid,
-            "orderId": ORDERID,
-        };
-
-        const signature = await PaytmChecksum.generateSignature(JSON.stringify(paytmParams.body), merchantKey);
-        paytmParams.head = { "signature": signature };
-
-        const statusResponse = await fetch(`${host}/v3/order/status`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(paytmParams)
-        });
-
-        const statusData = await statusResponse.json();
-        const isSuccess = statusData?.body?.resultInfo?.resultStatus === 'TXN_SUCCESS';
-
         // 1. Fetch the existing record created during create-order
-        // We now look up by razorpay_order_id because the ORDERID coming from Paytm 
-        // matches the one we generated and stored there.
         const { data: registration, error: fetchError } = await supabase
             .from('registrations')
             .select('*')
-            .eq('paytm_order_id', ORDERID)
+            .eq('paytm_order_id', finalOrderId)
             .single();
 
         if (fetchError || !registration) {
-            console.error("No registration found for ORDERID:", ORDERID, fetchError);
+            console.error("No registration found for Order ID:", finalOrderId, fetchError);
             return NextResponse.redirect(new URL(`/checkout?payment=failed&msg=RegistrationNotFound`, req.url), { status: 303 });
         }
 
@@ -71,9 +98,8 @@ export async function POST(req: Request) {
         };
 
         // 2. Record the payment attempt in the 'payments' table
-        const amount = TXNAMOUNT || statusData?.body?.txnAmount || registration.amount || '0';
+        const amount = paymentAmount || registration.amount || '0';
         const finalStatus = isSuccess ? 'paid' : 'failed';
-        const paytmTxnId = TXNID || statusData?.body?.txnId || 'N/A';
 
         console.log(`Recording payment for registration ${registration.id} with status: ${finalStatus}`);
 
@@ -81,8 +107,8 @@ export async function POST(req: Request) {
             .from('payments')
             .insert([{
                 registration_id: registration.id,
-                paytm_order_id: ORDERID,
-                paytm_payment_id: paytmTxnId,
+                paytm_order_id: finalOrderId,
+                paytm_payment_id: finalTxnId,
                 amount: amount,
                 status: finalStatus
             }]);
@@ -107,8 +133,7 @@ export async function POST(req: Request) {
         }
 
         if (!isSuccess) {
-            const msg = statusData?.body?.resultInfo?.resultMsg || "Payment Failed";
-            return NextResponse.redirect(new URL(`/checkout?payment=failed&msg=${encodeURIComponent(msg)}`, req.url), { status: 303 });
+            return NextResponse.redirect(new URL(`/checkout?payment=failed&msg=${encodeURIComponent(statusMsg)}`, req.url), { status: 303 });
         }
 
         // Send WhatsApp only on success

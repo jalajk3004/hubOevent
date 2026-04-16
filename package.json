@@ -30,6 +30,7 @@
     "nodemailer": "^8.0.1",
     "paytmchecksum": "^1.5.1",
     "radix-ui": "^1.4.3",
+    "razorpay": "^2.9.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "resend": "^6.9.4",

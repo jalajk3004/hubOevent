@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import PaytmChecksum from 'paytmchecksum';
+import Razorpay from 'razorpay';
 
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { amount, ticketData } = body;
+        const { amount, ticketData, preferredGateway } = body;
 
         if (!amount || isNaN(amount) || amount <= 0) {
             return NextResponse.json({ success: false, message: "Invalid amount" }, { status: 400 });
@@ -42,68 +43,122 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, message: "Failed to initiate registration" }, { status: 500 });
         }
 
-        // 3. Initiate Paytm Transaction
-        const mid = process.env.PAYTM_MID;
-        const mkey = process.env.PAYTM_MERCHANT_KEY;
-        const website = process.env.PAYTM_WEBSITE || 'DEFAULT';
-        const host = process.env.PAYTM_HOST || 'https://securestage.paytmpayments.com';
+        const tryPaytm = async () => {
+            const mid = process.env.PAYTM_MID;
+            const mkey = process.env.PAYTM_MERCHANT_KEY;
+            const website = process.env.PAYTM_WEBSITE || 'DEFAULT';
+            const host = process.env.PAYTM_HOST || 'https://securestage.paytmpayments.com';
 
-        if (!mid || !mkey) {
-            console.error("Missing Paytm credentials");
-            return NextResponse.json({ success: false, message: "Server configuration error" }, { status: 500 });
-        }
+            if (!mid || !mkey) {
+                console.warn("Paytm credentials missing");
+                return null;
+            }
 
-        const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/verify-payment`;
+            try {
+                const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/verify-payment`;
+                const paytmParams: any = {
+                    body: {
+                        requestType: "Payment",
+                        mid: mid,
+                        websiteName: website,
+                        orderId: orderId,
+                        callbackUrl: callbackUrl,
+                        txnAmount: { value: amount.toString(), currency: "INR" },
+                        userInfo: {
+                            custId: ticketData.email.replace(/[^a-zA-Z0-9]/g, '_'),
+                            mobile: ticketData.phone,
+                            email: ticketData.email
+                        },
+                    },
+                };
 
-        const paytmParams: any = {
-            body: {
-                requestType: "Payment",
-                mid: mid,
-                websiteName: website,
-                orderId: orderId,
-                callbackUrl: callbackUrl,
-                txnAmount: {
-                    value: amount.toString(),
-                    currency: "INR",
-                },
-                userInfo: {
-                    custId: ticketData.email.replace(/[^a-zA-Z0-9]/g, '_'),
-                    mobile: ticketData.phone,
-                    email: ticketData.email
-                },
-            },
+                const checksum = await PaytmChecksum.generateSignature(JSON.stringify(paytmParams.body), mkey);
+                paytmParams.head = { signature: checksum };
+
+                const post_data = JSON.stringify(paytmParams);
+                const url = `${host}/theia/api/v1/initiateTransaction?mid=${mid}&orderId=${orderId}`;
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: post_data,
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                const paytmResult = await response.json();
+
+                if (paytmResult.body?.resultInfo?.resultStatus === 'S') {
+                    return NextResponse.json({
+                        success: true,
+                        gateway: 'paytm',
+                        orderId: orderId,
+                        txnToken: paytmResult.body.txnToken,
+                        mid: mid,
+                        amount: amount.toString(),
+                        host: host
+                    }, { status: 200 });
+                } else {
+                    console.error("Paytm Initiation Failed, response:", paytmResult);
+                    return null;
+                }
+            } catch (err) {
+                console.error("Paytm init error/timeout:", err);
+                return null;
+            }
         };
 
-        const checksum = await PaytmChecksum.generateSignature(JSON.stringify(paytmParams.body), mkey);
-        paytmParams.head = { signature: checksum };
+        const tryRazorpay = async () => {
+            try {
+                const razorpay = new Razorpay({
+                    key_id: process.env.RAZORPAY_KEY_ID!,
+                    key_secret: process.env.RAZORPAY_KEY_SECRET!
+                });
 
-        const post_data = JSON.stringify(paytmParams);
-        const url = `${host}/theia/api/v1/initiateTransaction?mid=${mid}&orderId=${orderId}`;
+                const rzpOrder = await razorpay.orders.create({
+                    amount: amount * 100, // paise
+                    currency: "INR",
+                    receipt: orderId 
+                });
 
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: post_data
-        });
+                // Update registration with Razorpay ID so verify-payment can lookup by it
+                await supabase
+                    .from('registrations')
+                    .update({ paytm_order_id: rzpOrder.id })
+                    .eq('id', reg.id);
 
-        const result = await response.json();
+                return NextResponse.json({
+                    success: true,
+                    gateway: 'razorpay',
+                    orderId: rzpOrder.id,
+                    amount: amount.toString(),
+                    keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
+                }, { status: 200 });
+            } catch (rzpErr) {
+                console.error("Razorpay fallback failed:", rzpErr);
+                return null;
+            }
+        };
 
-        if (result.body?.resultInfo?.resultStatus === 'S') {
-            return NextResponse.json({
-                success: true,
-                orderId: orderId,
-                txnToken: result.body.txnToken,
-                mid: mid,
-                amount: amount.toString(),
-                host: host
-            }, { status: 200 });
+        let response = null;
+        if (preferredGateway === 'paytm') {
+            response = await tryPaytm();
+            if (!response) response = await tryRazorpay();
         } else {
-            console.error("Paytm Initiation Failed:", result);
-            return NextResponse.json({
-                success: false,
-                message: result.body?.resultInfo?.resultMsg || "Payment initiation failed"
-            }, { status: 500 });
+            // Defaults to Razorpay or specified as razorpay
+            response = await tryRazorpay();
+            if (!response) response = await tryPaytm();
         }
+
+        if (response) return response;
+
+        return NextResponse.json({
+            success: false,
+            message: "All payment gateways are currently unavailable."
+        }, { status: 500 });
 
     } catch (error) {
         console.error("Initiate Order Error:", error);

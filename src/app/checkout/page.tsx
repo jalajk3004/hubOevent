@@ -6,10 +6,11 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { ShieldCheck, Smartphone } from "lucide-react";
 
 
-// Extend window interface to recognize Paytm
+// Extend window interface to recognize Paytm and Razorpay
 declare global {
   interface Window {
     Paytm: any;
+    Razorpay: any;
   }
 }
 
@@ -22,6 +23,7 @@ function CheckoutContent() {
     address: ""
   });
 
+  const [preferredGateway, setPreferredGateway] = useState<"razorpay" | "paytm">("razorpay");
   const [isProcessing, setIsProcessing] = useState(false);
   const [ticketStatus, setTicketStatus] = useState<"idle" | "success" | "error">("idle");
   const searchParams = useSearchParams();
@@ -51,7 +53,7 @@ function CheckoutContent() {
       const res = await fetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount, ticketData })
+        body: JSON.stringify({ amount, ticketData, preferredGateway })
       });
 
       const data = await res.json();
@@ -62,6 +64,71 @@ function CheckoutContent() {
         return;
       }
 
+      if (data.gateway === 'razorpay') {
+        const loadRazorpayScript = () => {
+          return new Promise((resolve, reject) => {
+            if (window.Razorpay) { resolve(true); return; }
+            const script = document.createElement("script");
+            script.src = "https://checkout.razorpay.com/v1/checkout.js";
+            script.onload = () => resolve(true);
+            script.onerror = () => reject(new Error("Failed to load Razorpay SDK"));
+            document.body.appendChild(script);
+          });
+        };
+
+        try {
+          await loadRazorpayScript();
+          const options = {
+            key: data.keyId,
+            amount: data.amount * 100,
+            currency: "INR",
+            name: "Hubo Events",
+            description: "Dhurandhar Ticket",
+            order_id: data.orderId,
+            handler: function (response: any) {
+              const form = document.createElement('form');
+              form.action = '/api/verify-payment';
+              form.method = 'POST';
+              
+              const createInput = (name: string, value: string) => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = name;
+                input.value = value;
+                form.appendChild(input);
+              };
+              
+              createInput('razorpay_payment_id', response.razorpay_payment_id);
+              createInput('razorpay_order_id', response.razorpay_order_id);
+              createInput('razorpay_signature', response.razorpay_signature);
+              createInput('gateway', 'razorpay');
+              
+              document.body.appendChild(form);
+              form.submit();
+            },
+            prefill: {
+              name: ticketData.name,
+              email: ticketData.email,
+              contact: ticketData.phone
+            },
+            theme: { color: "#3B82F6" }
+          };
+
+          const rzp = new window.Razorpay(options);
+          rzp.on('payment.failed', function (response: any) {
+            console.error("Razorpay payment failed", response.error);
+            alert("Payment Failed: " + response.error.description);
+            setIsProcessing(false);
+          });
+          rzp.open();
+        } catch (rErr) {
+          console.error("Razorpay load error:", rErr);
+          setIsProcessing(false);
+        }
+        return;
+      }
+
+      // Paytm logic
       const host = data.host || 'https://securestage.paytmpayments.com';
       const cleanHost = host.endsWith('/') ? host.slice(0, -1) : host;
       const scriptUrl = `${cleanHost}/merchantpgpui/checkoutjs/merchants/${data.mid}.js`;
@@ -273,6 +340,32 @@ function CheckoutContent() {
                   <label className="block text-sm font-medium text-gray-300 mb-1">Address <span className="text-red-500">*</span></label>
                   <textarea required value={ticketData.address} onChange={e => setTicketData({ ...ticketData, address: e.target.value })}
                     className="w-full px-4 py-3 bg-[#0a080f] border border-gray-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all placeholder-gray-600 min-h-[100px]" placeholder="123 Street Name, City, State"></textarea>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-3">Payment Gateway</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div
+                      onClick={() => setPreferredGateway("razorpay")}
+                      className={`cursor-pointer flex items-center justify-center gap-2 px-4 py-3 rounded-xl border transition-all duration-300 select-none ${preferredGateway === "razorpay"
+                        ? 'bg-blue-600/20 border-blue-500 text-blue-400 font-bold shadow-[0_0_15px_rgba(59,130,246,0.3)] scale-[1.02]'
+                        : 'bg-[#0a080f] border-gray-800 text-gray-400 hover:border-gray-600 hover:text-gray-200 hover:bg-[#16121E]'
+                        }`}
+                    >
+                      <div className={`w-3 h-3 rounded-full border ${preferredGateway === 'razorpay' ? 'bg-blue-500 border-blue-400' : 'border-gray-500'}`}></div>
+                      Razorpay
+                    </div>
+                    <div
+                      onClick={() => setPreferredGateway("paytm")}
+                      className={`cursor-pointer flex items-center justify-center gap-2 px-4 py-3 rounded-xl border transition-all duration-300 select-none ${preferredGateway === "paytm"
+                        ? 'bg-blue-600/20 border-blue-500 text-blue-400 font-bold shadow-[0_0_15px_rgba(59,130,246,0.3)] scale-[1.02]'
+                        : 'bg-[#0a080f] border-gray-800 text-gray-400 hover:border-gray-600 hover:text-gray-200 hover:bg-[#16121E]'
+                        }`}
+                    >
+                      <div className={`w-3 h-3 rounded-full border ${preferredGateway === 'paytm' ? 'bg-blue-500 border-blue-400' : 'border-gray-500'}`}></div>
+                      Paytm
+                    </div>
+                  </div>
                 </div>
               </div>
 
