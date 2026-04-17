@@ -15,7 +15,7 @@ export default function Home() {
 
       <ScrollExpandHero
         videoSrcs={['/dancing.mp4', '/singing.mp4', '/dialogue.mp4']}
-        title="DHURANDHAR INSTA KE"
+        title="DHURANDHAR INSTA SE"
         subtitle="PRESENTED BY HUBO EVENTS"
         scrollToExpand="Scroll to expand"
       />

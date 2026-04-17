@@ -77,35 +77,9 @@ export default function AboutSection() {
           textAlign: 'center',
           textShadow: '0 0 15px rgba(255,42,133,0.3)',
         }}>
-          Organized By Monica Gulati
+          Organized By Monika Gulati
         </h3>
 
-        {/* Glowing Placeholder Image */}
-        <div className="relative w-64 h-64 md:w-80 md:h-80 rounded-full" style={{ padding: '3px' }}>
-          <div className="rgb-border-glow rounded-full" style={{ opacity: 0.3, filter: 'blur(8px)' }} />
-          <div className="rgb-border-wrapper rounded-full" style={{ opacity: 0.5 }} />
-
-          <div
-            className="relative w-full h-full rounded-full overflow-hidden flex items-center justify-center z-10"
-            style={{
-              background: 'linear-gradient(135deg, rgba(20,20,30,0.8), rgba(5,5,10,0.9))',
-              backdropFilter: 'blur(10px)',
-              boxShadow: 'inset 0 0 30px rgba(0,0,0,0.8)'
-            }}
-          >
-            <span style={{
-              fontFamily: 'var(--font-outfit)',
-              letterSpacing: '3px',
-              color: 'rgba(255,255,255,0.4)',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              textAlign: 'center',
-              padding: '20px'
-            }}>
-              IMAGE PLACEHOLDER
-            </span>
-          </div>
-        </div>
 
         <h4 style={{
           fontFamily: 'var(--font-inter)',

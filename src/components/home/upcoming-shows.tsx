@@ -67,7 +67,7 @@ export default function UpcomingShows() {
       {/* 6. ABOUT THE EVENT */}
       <section className={styles.gallerySection} id="gallery-section">
         <div className={styles.galleryHeader}>
-          <h2 className={styles.galleryTitle}>WHAT IS DHURANDHAR INSTA KE?</h2>
+          <h2 className={styles.galleryTitle}>WHAT IS DHURANDHAR INSTA SE?</h2>
           <p className={styles.galleryDesc}>
             India&apos;s biggest national talent showdown is here. Performers from every corner of the country come together to compete in <strong>Dance, Music, Comedy &amp; Mimicry</strong> — live on one electrifying stage. Whether you&apos;re a trained artist or a raw talent waiting to be discovered, this is your moment to shine.
           </p>

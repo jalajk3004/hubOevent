@@ -4,12 +4,10 @@ import { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ShieldCheck, Smartphone } from "lucide-react";
+import { EDGE_BASE } from "@/lib/api";
 
-
-// Extend window interface to recognize Paytm and Razorpay
 declare global {
   interface Window {
-    Paytm: any;
     Razorpay: any;
   }
 }
@@ -23,7 +21,6 @@ function CheckoutContent() {
     address: ""
   });
 
-  const [preferredGateway, setPreferredGateway] = useState<"razorpay" | "paytm">("razorpay");
   const [isProcessing, setIsProcessing] = useState(false);
   const [ticketStatus, setTicketStatus] = useState<"idle" | "success" | "error">("idle");
   const searchParams = useSearchParams();
@@ -50,10 +47,13 @@ function CheckoutContent() {
     try {
       const amount = 800;
 
-      const res = await fetch('/api/create-order', {
+      const res = await fetch(`${EDGE_BASE}/create-order`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount, ticketData, preferredGateway })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ amount, ticketData })
       });
 
       const data = await res.json();
@@ -64,144 +64,68 @@ function CheckoutContent() {
         return;
       }
 
-      if (data.gateway === 'razorpay') {
-        const loadRazorpayScript = () => {
-          return new Promise((resolve, reject) => {
-            if (window.Razorpay) { resolve(true); return; }
-            const script = document.createElement("script");
-            script.src = "https://checkout.razorpay.com/v1/checkout.js";
-            script.onload = () => resolve(true);
-            script.onerror = () => reject(new Error("Failed to load Razorpay SDK"));
-            document.body.appendChild(script);
-          });
-        };
-
-        try {
-          await loadRazorpayScript();
-          const options = {
-            key: data.keyId,
-            amount: data.amount * 100,
-            currency: "INR",
-            name: "Hubo Events",
-            description: "Dhurandhar Ticket",
-            order_id: data.orderId,
-            handler: function (response: any) {
-              const form = document.createElement('form');
-              form.action = '/api/verify-payment';
-              form.method = 'POST';
-              
-              const createInput = (name: string, value: string) => {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = name;
-                input.value = value;
-                form.appendChild(input);
-              };
-              
-              createInput('razorpay_payment_id', response.razorpay_payment_id);
-              createInput('razorpay_order_id', response.razorpay_order_id);
-              createInput('razorpay_signature', response.razorpay_signature);
-              createInput('gateway', 'razorpay');
-              
-              document.body.appendChild(form);
-              form.submit();
-            },
-            prefill: {
-              name: ticketData.name,
-              email: ticketData.email,
-              contact: ticketData.phone
-            },
-            theme: { color: "#3B82F6" }
-          };
-
-          const rzp = new window.Razorpay(options);
-          rzp.on('payment.failed', function (response: any) {
-            console.error("Razorpay payment failed", response.error);
-            alert("Payment Failed: " + response.error.description);
-            setIsProcessing(false);
-          });
-          rzp.open();
-        } catch (rErr) {
-          console.error("Razorpay load error:", rErr);
-          setIsProcessing(false);
-        }
-        return;
-      }
-
-      // Paytm logic
-      const host = data.host || 'https://securestage.paytmpayments.com';
-      const cleanHost = host.endsWith('/') ? host.slice(0, -1) : host;
-      const scriptUrl = `${cleanHost}/merchantpgpui/checkoutjs/merchants/${data.mid}.js`;
-
-      const loadScript = () => {
+      const loadRazorpayScript = () => {
         return new Promise((resolve, reject) => {
-          if (window.Paytm && window.Paytm.CheckoutJS) {
-            resolve(true);
-            return;
-          }
+          if (window.Razorpay) { resolve(true); return; }
           const script = document.createElement("script");
-          script.type = "application/javascript";
-          script.src = scriptUrl;
-          script.crossOrigin = "anonymous";
+          script.src = "https://checkout.razorpay.com/v1/checkout.js";
           script.onload = () => resolve(true);
-          script.onerror = () => reject(new Error(`Failed to load Paytm SDK from ${scriptUrl}`));
+          script.onerror = () => reject(new Error("Failed to load Razorpay SDK"));
           document.body.appendChild(script);
         });
       };
 
       try {
-        await loadScript();
-
-        const config = {
-          "root": "",
-          "flow": "CHECKOUT",
-          "data": {
-            "orderId": data.orderId,
-            "token": data.txnToken,
-            "tokenType": "TXN_TOKEN",
-            "amount": data.amount
-          },
-          "merchant": {
-            "mid": data.mid,
-            "redirect": true
-          },
-          "payMode": {
-            "labels": {},
-            "filter": { "exclude": [] },
-            "order": ["UPI", "CARD", "NB"]
-          },
-          "handler": {
-            "notifyMerchant": function (eventName: string, data: any) {
-              console.log("Paytm Notification => ", eventName, data);
-            },
-            "transactionStatus": function (statusData: any) {
-              window.Paytm.CheckoutJS.close();
-              const form = document.createElement('form');
-              form.action = '/api/verify-payment';
-              form.method = 'POST';
-              const orderInput = document.createElement('input');
-              orderInput.type = 'hidden';
-              orderInput.name = 'ORDERID';
-              orderInput.value = data.orderId;
-              form.appendChild(orderInput);
-              document.body.appendChild(form);
-              form.submit();
+        await loadRazorpayScript();
+        const options = {
+          key: data.keyId,
+          amount: data.amount * 100,
+          currency: "INR",
+          name: "Hubo Events",
+          description: "Dhurandhar Ticket",
+          order_id: data.orderId,
+          handler: async function (response: any) {
+            try {
+              const verifyRes = await fetch(`${EDGE_BASE}/verify-payment`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+                },
+                body: JSON.stringify({
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_signature: response.razorpay_signature,
+                })
+              });
+              const verifyData = await verifyRes.json();
+              if (verifyData.success) {
+                router.replace('/checkout?payment=success');
+              } else {
+                alert("Payment verification failed. Contact support with your payment ID: " + response.razorpay_payment_id);
+                setIsProcessing(false);
+              }
+            } catch {
+              alert("Verification error. Contact support with your payment ID: " + response.razorpay_payment_id);
+              setIsProcessing(false);
             }
-          }
+          },
+          prefill: {
+            name: ticketData.name,
+            email: ticketData.email,
+            contact: ticketData.phone
+          },
+          theme: { color: "#3B82F6" }
         };
 
-        if (window.Paytm && window.Paytm.CheckoutJS) {
-          window.Paytm.CheckoutJS.onLoad(function executeAfterCompleteLoad() {
-            window.Paytm.CheckoutJS.init(config).then(function onSuccess() {
-              window.Paytm.CheckoutJS.invoke();
-            }).catch(function onError(error: any) {
-              console.error("Paytm init error", error);
-              setIsProcessing(false);
-            });
-          });
-        }
-      } catch (scriptErr) {
-        console.error("Script load error:", scriptErr);
+        const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', function (response: any) {
+          alert("Payment Failed: " + response.error.description);
+          setIsProcessing(false);
+        });
+        rzp.open();
+      } catch (rErr) {
+        console.error("Razorpay load error:", rErr);
         setIsProcessing(false);
       }
     } catch (err) {
@@ -237,11 +161,11 @@ function CheckoutContent() {
               DHURANDHAR
             </span>
             <span style={{ background: 'linear-gradient(135deg, #ffffff 0%, #ff2a85 35%, #e0aaff 65%, #ffffff 100%)', backgroundSize: '200% 200%', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              INSTA KE
+              INSTA SE
             </span>
           </h1>
           <p className="text-gray-400 font-medium text-lg tracking-wider uppercase">
-            Organized by Hubo Events
+            Organized by Monika Gulati
           </p>
         </div>
       )}
@@ -266,12 +190,11 @@ function CheckoutContent() {
         ) : (
           <>
             <div className="p-6 md:p-8 border-b border-gray-800 bg-[#16121E]">
-              {/* Title moved to top container */}
               <div className="mb-6 flex justify-center">
                 <p className="text-white flex items-center gap-2 text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-900/40 via-purple-900/40 to-blue-900/40 py-3 px-6 rounded-xl border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
                   <span className="text-blue-400 animate-pulse">●</span>
                   <span className="text-gray-200 tracking-wide">Starting from</span>
-                  <span className="text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)] ml-1">10th May</span>
+                  <span className="text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)] ml-1">30th May</span>
                 </p>
               </div>
 
@@ -320,12 +243,12 @@ function CheckoutContent() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-3">Category <span className="text-red-500">*</span></label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {["Music", "Dancing", "Comedy/Mimicry"].map((cat) => (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+                    {["Music", "Dancing", "Comedy & Mimicry", "Dialogue Delivery"].map((cat) => (
                       <div
                         key={cat}
                         onClick={() => setTicketData({ ...ticketData, category: cat })}
-                        className={`cursor-pointer text-center px-4 py-3 rounded-xl border transition-all duration-300 select-none ${ticketData.category === cat
+                        className={`cursor-pointer text-center px-1 py-2 sm:px-2 md:py-3 rounded-xl border transition-all duration-300 select-none flex items-center justify-center text-[11px] sm:text-xs md:text-sm leading-snug break-words hyphens-auto min-h-[44px] sm:min-h-[48px] ${ticketData.category === cat
                           ? 'bg-blue-600/20 border-blue-500 text-blue-400 font-bold shadow-[0_0_15px_rgba(59,130,246,0.3)] scale-[1.02]'
                           : 'bg-[#0a080f] border-gray-800 text-gray-400 hover:border-gray-600 hover:text-gray-200 hover:bg-[#16121E]'
                           }`}
@@ -340,32 +263,6 @@ function CheckoutContent() {
                   <label className="block text-sm font-medium text-gray-300 mb-1">Address <span className="text-red-500">*</span></label>
                   <textarea required value={ticketData.address} onChange={e => setTicketData({ ...ticketData, address: e.target.value })}
                     className="w-full px-4 py-3 bg-[#0a080f] border border-gray-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all placeholder-gray-600 min-h-[100px]" placeholder="123 Street Name, City, State"></textarea>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-3">Payment Gateway</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div
-                      onClick={() => setPreferredGateway("razorpay")}
-                      className={`cursor-pointer flex items-center justify-center gap-2 px-4 py-3 rounded-xl border transition-all duration-300 select-none ${preferredGateway === "razorpay"
-                        ? 'bg-blue-600/20 border-blue-500 text-blue-400 font-bold shadow-[0_0_15px_rgba(59,130,246,0.3)] scale-[1.02]'
-                        : 'bg-[#0a080f] border-gray-800 text-gray-400 hover:border-gray-600 hover:text-gray-200 hover:bg-[#16121E]'
-                        }`}
-                    >
-                      <div className={`w-3 h-3 rounded-full border ${preferredGateway === 'razorpay' ? 'bg-blue-500 border-blue-400' : 'border-gray-500'}`}></div>
-                      Razorpay
-                    </div>
-                    <div
-                      onClick={() => setPreferredGateway("paytm")}
-                      className={`cursor-pointer flex items-center justify-center gap-2 px-4 py-3 rounded-xl border transition-all duration-300 select-none ${preferredGateway === "paytm"
-                        ? 'bg-blue-600/20 border-blue-500 text-blue-400 font-bold shadow-[0_0_15px_rgba(59,130,246,0.3)] scale-[1.02]'
-                        : 'bg-[#0a080f] border-gray-800 text-gray-400 hover:border-gray-600 hover:text-gray-200 hover:bg-[#16121E]'
-                        }`}
-                    >
-                      <div className={`w-3 h-3 rounded-full border ${preferredGateway === 'paytm' ? 'bg-blue-500 border-blue-400' : 'border-gray-500'}`}></div>
-                      Paytm
-                    </div>
-                  </div>
                 </div>
               </div>
 
